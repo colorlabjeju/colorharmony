@@ -326,12 +326,13 @@ export default function App() {
   const [picked, setPicked] = useState([]);
   const [typed, setTyped] = useState("");
   const [msg, setMsg] = useState("");
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(true);
   const [saved, setSaved] = useState([]);
   const [overrides, setOverrides] = useState({});
   const [note, setNote] = useState("");
   const [ready, setReady] = useState(false);
   const sheetRef = useRef(null);
+  const gridRef = useRef(null);
 
   useEffect(() => {
     try {
@@ -428,7 +429,7 @@ export default function App() {
                   placeholder="인덱스 입력 (예: BG56)" className="px-3 py-2 rounded-lg text-[15px] w-[186px] outline-none"
                   style={{ border: "1px solid #cfd8dc", letterSpacing: ".06em" }} />
                 <button onClick={() => add(typed)} className="px-4 py-2 rounded-lg text-[14px] font-semibold text-white" style={{ background: INK }}>추가</button>
-                <button onClick={() => setOpen(!open)} className="px-4 py-2 rounded-lg text-[14px]" style={{ border: "1px solid #cfd8dc" }}>
+                <button onClick={() => { const v = !open; setOpen(v); if (v) setTimeout(() => gridRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }), 60); }} className="px-4 py-2 rounded-lg text-[14px]" style={{ border: "1px solid #cfd8dc" }}>
                   {open ? "카드 접기" : "46색에서 고르기"}
                 </button>
                 {picked.length > 0 && <button onClick={() => { setPicked([]); setMsg(""); }} className="px-3 py-2 text-[14px]" style={{ color: "#7b8a92" }}>모두 비우기</button>}
@@ -444,6 +445,27 @@ export default function App() {
                   </button>
                 ))}
               </div>
+
+              {open && (
+                <div ref={gridRef} style={{ marginTop: 4, marginBottom: 16, paddingTop: 16, borderTop: "1px solid #e6ebed" }}>
+                  <div style={{ fontSize: 12.5, color: "#7b8a92", marginBottom: 10 }}>
+                    카드를 눌러 담으세요 · 전체 {DB.length}색
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(84px, 1fr))", gap: 6 }}>
+                    {DB.map((d) => (
+                      <button key={d.c} onClick={() => add(d.c)} title={`${d.c} · ${d.ko}`}
+                        style={{
+                          display: "block", width: "100%", textAlign: "left", padding: 0,
+                          borderRadius: 8, overflow: "hidden", cursor: "pointer", background: "#fff",
+                          border: picked.includes(d.c) ? `2px solid ${INK}` : "1px solid #e0e6e8",
+                        }}>
+                        <div style={{ background: d.hex, height: 36, width: "100%" }} />
+                        <div style={{ padding: "5px 6px", fontSize: 11, letterSpacing: ".05em", color: INK }}>{d.c}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="flex flex-wrap gap-1.5">
                 {PRESETS.map((p) => (
@@ -462,17 +484,6 @@ export default function App() {
                   style={{ border: "1px solid #cfd8dc", color: picked.length ? INK : "#9aa8ae" }}>판독 결과 복사</button>
               </div>
 
-              {open && (
-                <div className="grid grid-cols-[repeat(auto-fill,minmax(86px,1fr))] gap-1.5 mt-4 pt-4" style={{ borderTop: "1px solid #e6ebed" }}>
-                  {DB.map((d) => (
-                    <button key={d.c} onClick={() => add(d.c)} title={d.ko} className="rounded-lg overflow-hidden text-left"
-                      style={{ border: picked.includes(d.c) ? `2px solid ${INK}` : "1px solid #e0e6e8" }}>
-                      <div style={{ background: d.hex, height: 34 }} />
-                      <div className="px-1.5 py-1 text-[11px]" style={{ letterSpacing: ".05em" }}>{d.c}</div>
-                    </button>
-                  ))}
-                </div>
-              )}
             </div>
 
             {picked.length === 0 ? (

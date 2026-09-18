@@ -116,6 +116,13 @@ const readable = (hex) => {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.45 ? "#16232b" : "#ffffff";
 };
 
+const AX = {
+  활력: ["열정","활력","생명력","역동적인","활기찬","대담한","생기있는","환희","경쾌한","생동하는","상큼한","싱그러운","화사한","찬란한","긍정적인","희망","성장","환한","풍요로운","확신","회복하는","풍성한","충만한","환영하는","희망찬","유연한","밝은","무한한","창의적인"],
+  안정: ["안정된","차분한","고요한","평화로운","편안한","단단한","굳건한","묵직한","진중한","안정","포근한","온화한","잔잔한","안온한","평온한","조용한","회복","안정감","안정적인","포용하는","듬직한","뿌리 깊은","무게 있는","강인한","은은한","여유","여유로운","낙천적인","따뜻한","따스한","다정한","성숙한"],
+  감성: ["신비로운","우아한","고결한","섬세한","설레는","영감을 주는","고혹적인","품격","순수한","청초한","투명한","부드러운","다정다감한","풋풋한","맑은","깨끗한","가벼운"],
+  이성: ["이성적인","명료한","절제된","신뢰","신뢰감","중립적인","담백한","깊이 있는","사색적인","신중함","침착","도회적인","세련된","깊은","깊숙한","절대적인","균형","위엄 있는","청량","청량한","시원한","환기","청명한","고귀한"],
+  };
+
 /* ---------- 배색 판정 ---------- */
 function readHarmony(sel) {
   if (!sel.length) return null;
@@ -213,12 +220,6 @@ function readHarmony(sel) {
   const accent = byC[byC.length - 1], dominant = byC[0];
   const support = byC.filter((s) => s !== accent && s !== dominant);
 
-  const AX = {
-    활력: ["열정","활력","생명력","역동적인","활기찬","대담한","생기있는","환희","경쾌한","생동하는","상큼한","싱그러운","화사한","찬란한","긍정적인","희망","성장","환한","풍요로운","확신","회복하는","풍성한","충만한","환영하는","희망찬","유연한","밝은","무한한","창의적인"],
-    안정: ["안정된","차분한","고요한","평화로운","편안한","단단한","굳건한","묵직한","진중한","안정","포근한","온화한","잔잔한","안온한","평온한","조용한","회복","안정감","안정적인","포용하는","듬직한","뿌리 깊은","무게 있는","강인한","은은한","여유","여유로운","낙천적인","따뜻한","따스한","다정한","성숙한"],
-    감성: ["신비로운","우아한","고결한","섬세한","설레는","영감을 주는","고혹적인","품격","순수한","청초한","투명한","부드러운","다정다감한","풋풋한","맑은","깨끗한","가벼운"],
-    이성: ["이성적인","명료한","절제된","신뢰","신뢰감","중립적인","담백한","깊이 있는","사색적인","신중함","침착","도회적인","세련된","깊은","깊숙한","절대적인","균형","위엄 있는","청량","청량한","시원한","환기","청명한","고귀한"],
-  };
   const score = { 활력: 0, 안정: 0, 감성: 0, 이성: 0 };
   sel.forEach((s) => s.k.forEach((w) => Object.entries(AX).forEach(([ax, l]) => { if (l.includes(w)) score[ax]++; })));
   const top = Object.entries(score).sort((a, b) => b[1] - a[1]);
@@ -261,6 +262,98 @@ function suggest(sel, db) {
     if (neu[0]) out.push({ card: neu[0], why: dark ? "명도를 아래로 벌려 구조를 잡아 주는 무채색" : "여백을 만들어 주는 밝은 무채색" });
   }
   return out.slice(0, 3);
+}
+
+
+/* ---------- 키워드로 배색 찾기 ---------- */
+const VOCAB = (() => {
+  const all = [...new Set(CARDS.flatMap((c) => c.k))];
+  const g = { 활력: [], 안정: [], 감성: [], 이성: [], 기타: [] };
+  all.forEach((w) => {
+    const ax = Object.keys(AX).find((a) => AX[a].includes(w));
+    g[ax || "기타"].push(w);
+  });
+  Object.values(g).forEach((l) => l.sort((a, b) => a.localeCompare(b, "ko")));
+  return g;
+})();
+
+const axisOf = (words) => {
+  const p = { 활력: 0, 안정: 0, 감성: 0, 이성: 0 };
+  words.forEach((w) => Object.keys(AX).forEach((a) => { if (AX[a].includes(w)) p[a]++; }));
+  return p;
+};
+
+function scoreCards(kws, text, db) {
+  const want = axisOf(kws);
+  const wantSum = Math.max(1, Object.values(want).reduce((a, b) => a + b, 0));
+  const t = text.trim();
+  return db.map((d) => {
+    let s = 0;
+    const hit = [];
+    kws.forEach((k) => {
+      if (d.k.includes(k)) { s += 4; hit.push(k); }
+      else if (d.k.some((w) => w.includes(k) || k.includes(w))) { s += 1.8; hit.push(k); }
+      else if (d.m.includes(k)) { s += 1.2; hit.push(k); }
+    });
+    if (t) {
+      if (d.k.some((w) => w.includes(t))) s += 2.5;
+      if (d.m.includes(t) || d.ko.includes(t) || d.place.includes(t)) s += 1.8;
+      if (d.en.toLowerCase().includes(t.toLowerCase())) s += 1.2;
+    }
+    const mine = axisOf(d.k);
+    const mineSum = Math.max(1, Object.values(mine).reduce((a, b) => a + b, 0));
+    const dot = Object.keys(want).reduce((acc, a) => acc + (want[a] / wantSum) * (mine[a] / mineSum), 0);
+    s += dot * 3;
+    return { d, s, hit: [...new Set(hit)] };
+  }).sort((a, b) => b.s - a.s);
+}
+
+const FORMS = [
+  { id: "split",  name: "분리 보색 조화",   off: [0, 144, 216], tol: 22, note: "활력은 살리고 충돌은 줄인 3색" },
+  { id: "comp",   name: "보색 조화",        off: [0, 180],      tol: 26, note: "대비가 가장 강한 2색" },
+  { id: "analog", name: "유사 색상 조화",   off: [0, 36, 72],   tol: 16, note: "한 방향으로 흐르는 3색" },
+  { id: "triad",  name: "3색 등간격 조화",  off: [0, 108, 216], tol: 26, note: "대비와 균형이 함께 서는 3색" },
+  { id: "mono",   name: "동일 색상 조화",   off: [0],           tol: 0,  note: "한 색상 안에서 명도만 벌린 구성" },
+];
+
+function buildPalettes(scored, addNeutral) {
+  const chroma = scored.filter((e) => e.d.f.wheel !== null && !e.d.f.achroma && e.d.d2 >= 1);
+  if (!chroma.length) return [];
+  const anchor = chroma[0];
+  const out = [];
+
+  FORMS.forEach((form) => {
+    let picks = [anchor];
+    if (form.id === "mono") {
+      const same = chroma.filter((e) => e.d.fam === anchor.d.fam && e.d.c !== anchor.d.c);
+      const far = same.filter((e) => Math.abs(e.d.d1 - anchor.d.d1) >= 2).slice(0, 2);
+      picks = [anchor, ...(far.length ? far : same.slice(0, 2))];
+    } else {
+      form.off.slice(1).forEach((off) => {
+        const target = (anchor.d.f.wheel + off + 360) % 360;
+        const cand = chroma.find((e) => !picks.includes(e) && cd(e.d.f.wheel, target) <= form.tol);
+        if (cand) picks.push(cand);
+      });
+    }
+    if (picks.length < 2) return;
+
+    if (addNeutral && picks.length < 5) {
+      const dark = picks.every((e) => e.d.L > 45);
+      const neu = scored.filter((e) => e.d.f.achroma || e.d.f.quasi)
+        .sort((a, b) => (dark ? a.d.L - b.d.L : b.d.L - a.d.L))[0];
+      if (neu) picks.push(neu);
+    }
+
+    const avg = picks.reduce((a, e) => a + e.s, 0) / picks.length;
+    out.push({
+      form, codes: picks.map((e) => e.d.c),
+      cards: picks.map((e) => e.d),
+      hits: [...new Set(picks.flatMap((e) => e.hit))],
+      avg,
+    });
+  });
+
+  return out.sort((a, b) => b.avg - a.avg).slice(0, 3);
 }
 
 /* ---------- 색상환 ---------- */
@@ -330,6 +423,9 @@ export default function App() {
   const [saved, setSaved] = useState([]);
   const [overrides, setOverrides] = useState({});
   const [note, setNote] = useState("");
+  const [kws, setKws] = useState([]);
+  const [qtext, setQtext] = useState("");
+  const [withNeutral, setWithNeutral] = useState(true);
   const [ready, setReady] = useState(false);
   const sheetRef = useRef(null);
   const gridRef = useRef(null);
@@ -351,6 +447,11 @@ export default function App() {
   const sel = picked.map((c) => byCode[c]).filter(Boolean);
   const h = useMemo(() => readHarmony(sel), [picked, DB]);
   const tips = useMemo(() => suggest(sel, DB), [picked, DB]);
+  const proposals = useMemo(
+    () => (kws.length || qtext.trim() ? buildPalettes(scoreCards(kws, qtext, DB), withNeutral) : []),
+    [kws, qtext, withNeutral, DB]
+  );
+  const toggleKw = (w) => setKws(kws.includes(w) ? kws.filter((x) => x !== w) : kws.length >= 6 ? kws : [...kws, w]);
 
   const add = (code) => {
     const c = String(code).trim().toUpperCase();
@@ -414,6 +515,7 @@ export default function App() {
 
         <div className="flex gap-1 mb-5">
           <Tab id="read">배색 읽기</Tab>
+          <Tab id="find">키워드로 찾기</Tab>
           <Tab id="saved">저장한 배색{saved.length ? ` ${saved.length}` : ""}</Tab>
           <Tab id="cal">색 견본 보정</Tab>
         </div>
@@ -592,6 +694,93 @@ export default function App() {
                   ))}
                 </div>
 
+              </div>
+            )}
+          </>
+        )}
+
+        {/* ================= 키워드로 찾기 ================= */}
+        {tab === "find" && (
+          <>
+            <div className="rounded-2xl p-5 mb-6" style={{ background: "#fff" }}>
+              <h3 className="text-[17px] font-bold mb-1">담고 싶은 인상을 고르세요</h3>
+              <p className="text-[13.5px] mb-4" style={{ color: "#5d6b73" }}>
+                46색 카드가 지닌 키워드에서 최대 여섯 개까지 고르면, 그에 맞는 카드를 찾아 배색 형태까지 짜서 제안합니다.
+              </p>
+
+              <input value={qtext} onChange={(e) => setQtext(e.target.value)}
+                placeholder="직접 입력해도 됩니다 (예: 겨울 바다, 한라산, 쉼)"
+                style={{ width: "100%", maxWidth: 380, padding: "9px 12px", borderRadius: 8, fontSize: 14, border: "1px solid #cfd8dc", outline: "none", marginBottom: 16 }} />
+
+              {Object.entries(VOCAB).map(([ax, list]) => (
+                <div key={ax} style={{ marginBottom: 12 }}>
+                  <div style={{ fontSize: 12, color: "#7b8a92", marginBottom: 6 }}>{ax}</div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                    {list.map((w) => {
+                      const on = kws.includes(w);
+                      return (
+                        <button key={w} onClick={() => toggleKw(w)}
+                          style={{
+                            padding: "5px 10px", borderRadius: 999, fontSize: 12.5, cursor: "pointer",
+                            background: on ? INK : "#f4f7f7", color: on ? "#fff" : "#4b5b63",
+                            border: on ? `1px solid ${INK}` : "1px solid #e6ebed",
+                          }}>{w}</button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+
+              <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 16, paddingTop: 14, borderTop: "1px solid #e6ebed", flexWrap: "wrap" }}>
+                <label style={{ fontSize: 13.5, color: "#4b5b63", display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+                  <input type="checkbox" checked={withNeutral} onChange={(e) => setWithNeutral(e.target.checked)} />
+                  무채색 한 장 곁들이기
+                </label>
+                <span style={{ fontSize: 13, color: "#9aa8ae" }}>고른 키워드 {kws.length} / 6</span>
+                {kws.length > 0 && (
+                  <button onClick={() => setKws([])} style={{ fontSize: 13, color: "#7b8a92", cursor: "pointer", background: "none", border: "none" }}>비우기</button>
+                )}
+              </div>
+            </div>
+
+            {proposals.length === 0 ? (
+              <div className="rounded-2xl p-10 text-center text-[14.5px]" style={{ background: "#fff", color: "#7b8a92" }}>
+                키워드를 하나 고르면 그때부터 배색을 제안합니다.
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {proposals.map((p, idx) => (
+                  <div key={p.form.id} className="rounded-2xl overflow-hidden" style={{ background: "#fff" }}>
+                    <div style={{ display: "flex", height: 64 }}>
+                      {p.cards.map((c) => (
+                        <div key={c.c} style={{ background: c.hex, flex: 1, display: "flex", alignItems: "flex-end", padding: 6 }}>
+                          <span style={{ fontSize: 11, letterSpacing: ".05em", color: readable(c.hex) }}>{c.c}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{ padding: 18 }}>
+                      <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap", marginBottom: 6 }}>
+                        {idx === 0 && <span style={{ fontSize: 11, padding: "2px 7px", borderRadius: 4, background: INK, color: "#fff" }}>가장 잘 맞음</span>}
+                        <span style={{ fontSize: 17, fontWeight: 700 }}>{p.form.name}</span>
+                        <span style={{ fontSize: 13, color: "#7b8a92" }}>{p.form.note}</span>
+                      </div>
+                      <div style={{ fontSize: 13.5, color: "#4b5b63", lineHeight: 1.7, marginBottom: 10 }}>
+                        {p.cards.map((c) => c.ko.split(" — ")[0]).join(" · ")}
+                      </div>
+                      {p.hits.length > 0 && (
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 12 }}>
+                          {p.hits.map((w) => (
+                            <span key={w} style={{ fontSize: 12, padding: "2px 8px", borderRadius: 4, background: "#f1f4f5", color: "#5d6b73" }}>{w}</span>
+                          ))}
+                        </div>
+                      )}
+                      <button onClick={() => { setPicked(p.codes); setTab("read"); setMsg(""); }}
+                        style={{ padding: "8px 16px", borderRadius: 8, fontSize: 14, fontWeight: 600, color: "#fff", background: INK, cursor: "pointer", border: "none" }}>
+                        이 배색으로 읽기
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </>
